@@ -1,0 +1,48 @@
+{
+  "types": [
+    {
+      "id": "feat",
+      "label": "✨ Fitur Baru"
+    },
+    {
+      "id": "fix",
+      "label": "🐛 Perbaikan Bug"
+    },
+    {
+      "id": "docs",
+      "label": "📝 Dokumentasi"
+    },
+    {
+      "id": "style",
+      "label": "💄 Styling"
+    },
+    {
+      "id": "refactor",
+      "label": "♻️ Refactoring"
+    },
+    {
+      "id": "test",
+      "label": "✅ Testing"
+    },
+    {
+      "id": "chore",
+      "label": "🔧 Chore"
+    },
+    {
+      "id": "perf",
+      "label": "⚡ Performance"
+    },
+    {
+      "id": "ci",
+      "label": "👷 CI/CD"
+    },
+    {
+      "id": "build",
+      "label": "📦 Build"
+    },
+    {
+      "id": "revert",
+      "label": "⏪ Revert"
+    }
+  ]
+}

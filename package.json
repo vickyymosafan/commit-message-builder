@@ -1,0 +1,49 @@
+{
+  "name": "conventional-commit-webview",
+  "displayName": "Conventional Commit Helper",
+  "description": "Extension untuk membuat Conventional Commit dengan Webview interaktif",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "conventionalCommit.buat",
+        "title": "Buat Conventional Commit"
+      }
+    ],
+    "configuration": {
+      "title": "Conventional Commit",
+      "properties": {
+        "conventionalCommit.schemaPath": {
+          "type": "string",
+          "default": ".vscode/commit-types.json",
+          "description": "Path ke file JSON schema untuk type commit"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "install-extension": "code --install-extension conventional-commit-webview-0.0.1.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vsce": "^2.15.0"
+  }
+}
