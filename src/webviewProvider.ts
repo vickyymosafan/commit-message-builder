@@ -6,6 +6,12 @@ import { CommitBuilder } from './commitBuilder';
 /**
  * Class untuk mengelola Webview Panel lifecycle
  * Bertanggung jawab untuk membuat webview, generate HTML content, dan setup message handling
+ * 
+ * Design Decision: WebviewProvider encapsulates semua webview-related logic
+ * untuk separation of concerns. Extension.ts hanya perlu call createWebview()
+ * tanpa perlu tahu detail implementation.
+ * 
+ * Lifecycle: create → setup → active → dispose
  */
 export class WebviewProvider {
     private context: vscode.ExtensionContext;
@@ -14,37 +20,52 @@ export class WebviewProvider {
     private messageHandler: MessageHandler | undefined;
     private outputChannel: vscode.OutputChannel;
 
+    /**
+     * Constructor untuk WebviewProvider
+     * @param context Extension context untuk akses ke extension resources
+     * @param schemaManager Schema manager untuk load commit types
+     */
     constructor(context: vscode.ExtensionContext, schemaManager: SchemaManager) {
         this.context = context;
         this.schemaManager = schemaManager;
+        // Create dedicated output channel untuk webview logging
         this.outputChannel = vscode.window.createOutputChannel('Conventional Commit');
     }
 
     /**
      * Buat dan tampilkan Webview Panel
      * Configure webview options dan setup message handling
+     * 
+     * Design Decision: Webview options configured untuk balance antara
+     * functionality dan security:
+     * - enableScripts: Required untuk form interaction dan postMessage
+     * - retainContextWhenHidden: Preserve state saat user switch tabs
+     * - localResourceRoots: Restrict file access untuk security
      */
     public createWebview(): void {
         // Buat WebviewPanel dengan vscode.window.createWebviewPanel()
         this.panel = vscode.window.createWebviewPanel(
-            'conventionalCommit', // View type identifier
-            'Buat Conventional Commit', // Panel title
-            vscode.ViewColumn.One, // Show in editor column one
+            'conventionalCommit', // View type identifier (unique per extension)
+            'Buat Conventional Commit', // Panel title (displayed in tab)
+            vscode.ViewColumn.One, // Show in editor column one (main editor area)
             {
-                // Webview options
-                enableScripts: true, // Enable JavaScript dalam webview
-                retainContextWhenHidden: true, // Retain context saat webview hidden
-                localResourceRoots: [this.context.extensionUri] // Restrict resource access
+                // Webview options untuk configure behavior dan security
+                enableScripts: true, // Enable JavaScript dalam webview (required untuk form)
+                retainContextWhenHidden: true, // Retain context saat webview hidden (preserve form state)
+                localResourceRoots: [this.context.extensionUri] // Restrict resource access untuk security
             }
         );
 
         // Set HTML content dengan memanggil getHtmlContent()
+        // HTML includes form, styling, dan JavaScript untuk interaction
         this.panel.webview.html = this.getHtmlContent(this.panel.webview);
 
         // Setup message handling dengan memanggil setupMessageHandling()
+        // Ini setup bidirectional communication antara webview dan extension
         this.setupMessageHandling(this.panel);
 
-        // Handle panel disposal
+        // Handle panel disposal untuk cleanup
+        // onDidDispose triggered ketika user close panel atau extension deactivate
         this.panel.onDidDispose(() => {
             this.dispose();
         });
@@ -55,11 +76,20 @@ export class WebviewProvider {
     /**
      * Generate HTML content untuk webview
      * Include CSP, CSS styling, dan JavaScript untuk form handling
+     * 
+     * Design Decisions:
+     * - Inline CSS: Menggunakan VS Code theme variables untuk consistent theming
+     * - Inline JavaScript: Menggunakan nonce-based CSP untuk security
+     * - No external resources: Semua assets inline untuk simplicity dan reliability
+     * - Semantic HTML: Menggunakan proper form elements untuk accessibility
+     * - Progressive enhancement: Form berfungsi dengan JavaScript, validation di client dan server
+     * 
      * @param webview Webview instance untuk CSP source
-     * @returns HTML string lengkap
+     * @returns HTML string lengkap dengan form, styling, dan scripts
      */
     private getHtmlContent(webview: vscode.Webview): string {
-        // Generate nonce untuk CSP
+        // Generate nonce untuk CSP (Content Security Policy)
+        // Nonce allows inline scripts secara aman
         const nonce = this.getNonce();
 
         return `<!DOCTYPE html>
@@ -420,12 +450,19 @@ export class WebviewProvider {
     }
 
     /**
-     * Generate random nonce untuk CSP
-     * @returns Random nonce string
+     * Generate random nonce untuk CSP (Content Security Policy)
+     * Nonce digunakan untuk allow inline scripts secara aman
+     * 
+     * Design Decision: Menggunakan nonce-based CSP untuk allow inline scripts
+     * sambil maintain security. Ini lebih aman dibanding 'unsafe-inline' karena
+     * hanya scripts dengan nonce yang matching yang bisa execute.
+     * 
+     * @returns Random nonce string (32 characters alphanumeric)
      */
     private getNonce(): string {
         let text = '';
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        // Generate 32 character random string untuk cryptographic strength
         for (let i = 0; i < 32; i++) {
             text += possible.charAt(Math.floor(Math.random() * possible.length));
         }
@@ -435,13 +472,19 @@ export class WebviewProvider {
     /**
      * Setup message handling untuk komunikasi dengan webview
      * Buat MessageHandler dan setup listener untuk incoming messages
+     * 
+     * Design Decision: MessageHandler di-instantiate di sini untuk encapsulate
+     * communication logic. WebviewProvider hanya perlu setup listener dan
+     * delegate message processing ke MessageHandler.
+     * 
      * @param panel WebviewPanel instance
      */
     private setupMessageHandling(panel: vscode.WebviewPanel): void {
-        // Buat instance CommitBuilder
+        // Buat instance CommitBuilder untuk generate commit messages
         const commitBuilder = new CommitBuilder();
 
-        // Buat instance MessageHandler dengan panel, CommitBuilder, dan SchemaManager
+        // Buat instance MessageHandler dengan dependencies
+        // MessageHandler acts as mediator antara webview dan business logic
         this.messageHandler = new MessageHandler(
             panel,
             commitBuilder,
@@ -450,12 +493,15 @@ export class WebviewProvider {
         );
 
         // Setup webview.onDidReceiveMessage listener
+        // Ini adalah event listener untuk messages dari webview
         panel.webview.onDidReceiveMessage(
             message => {
                 // Pass received messages ke MessageHandler.handleMessage()
+                // MessageHandler handles routing dan processing
                 this.messageHandler?.handleMessage(message);
             },
             undefined,
+            // Add listener ke context.subscriptions untuk automatic disposal
             this.context.subscriptions
         );
 
@@ -465,17 +511,24 @@ export class WebviewProvider {
     /**
      * Dispose webview dan cleanup resources
      * Dipanggil ketika webview ditutup atau extension deactivate
+     * 
+     * Design Decision: Explicit disposal untuk prevent memory leaks.
+     * Set references ke undefined untuk allow garbage collection.
+     * VS Code akan automatically dispose resources yang di-register via
+     * context.subscriptions, tapi kita cleanup explicitly untuk clarity.
      */
     public dispose(): void {
         this.outputChannel.appendLine('Disposing webview...');
 
-        // Dispose WebviewPanel
+        // Dispose WebviewPanel untuk free resources
         if (this.panel) {
             this.panel.dispose();
+            // Set ke undefined untuk allow garbage collection
             this.panel = undefined;
         }
 
         // Cleanup MessageHandler reference
+        // MessageHandler tidak perlu explicit dispose karena tidak hold resources
         this.messageHandler = undefined;
 
         this.outputChannel.appendLine('Webview disposed successfully');
